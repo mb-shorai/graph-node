@@ -9,7 +9,7 @@ use anyhow::{anyhow, Error};
 use itertools::Itertools;
 use serde::de;
 use serde::{Deserialize, Serialize};
-use stable_hash_legacy::prelude::*;
+use stable_hash::{StableHash, StableHasher};
 use std::convert::TryFrom;
 use std::fmt;
 use std::iter::FromIterator;
@@ -189,8 +189,55 @@ pub enum Value {
     BigInt(scalar::BigInt),
 }
 
+impl stable_hash_legacy::StableHash for Value {
+    fn stable_hash<H: stable_hash_legacy::StableHasher>(
+        &self,
+        mut sequence_number: H::Seq,
+        state: &mut H,
+    ) {
+        use stable_hash_legacy::prelude::*;
+        use Value::*;
+
+        // This is the default, so write nothing.
+        if self == &Null {
+            return;
+        }
+        stable_hash_legacy::StableHash::stable_hash(
+            &self.as_static().to_string(),
+            sequence_number.next_child(),
+            state,
+        );
+
+        match self {
+            Null => unreachable!(),
+            String(inner) => {
+                stable_hash_legacy::StableHash::stable_hash(inner, sequence_number, state)
+            }
+            Int(inner) => {
+                stable_hash_legacy::StableHash::stable_hash(inner, sequence_number, state)
+            }
+            BigDecimal(inner) => {
+                stable_hash_legacy::StableHash::stable_hash(inner, sequence_number, state)
+            }
+            Bool(inner) => {
+                stable_hash_legacy::StableHash::stable_hash(inner, sequence_number, state)
+            }
+            List(inner) => {
+                stable_hash_legacy::StableHash::stable_hash(inner, sequence_number, state)
+            }
+            Bytes(inner) => {
+                stable_hash_legacy::StableHash::stable_hash(inner, sequence_number, state)
+            }
+            BigInt(inner) => {
+                stable_hash_legacy::StableHash::stable_hash(inner, sequence_number, state)
+            }
+        }
+    }
+}
+
 impl StableHash for Value {
-    fn stable_hash<H: StableHasher>(&self, mut sequence_number: H::Seq, state: &mut H) {
+    fn stable_hash<H: StableHasher>(&self, field_address: H::Addr, state: &mut H) {
+        use stable_hash::FieldAddress;
         use Value::*;
 
         // This is the default, so write nothing.
@@ -198,18 +245,17 @@ impl StableHash for Value {
             return;
         }
 
-        self.as_static()
-            .stable_hash(sequence_number.next_child(), state);
+        self.as_static().stable_hash(field_address.child(0), state);
 
         match self {
             Null => unreachable!(),
-            String(inner) => inner.stable_hash(sequence_number, state),
-            Int(inner) => inner.stable_hash(sequence_number, state),
-            BigDecimal(inner) => inner.stable_hash(sequence_number, state),
-            Bool(inner) => inner.stable_hash(sequence_number, state),
-            List(inner) => inner.stable_hash(sequence_number, state),
-            Bytes(inner) => inner.stable_hash(sequence_number, state),
-            BigInt(inner) => inner.stable_hash(sequence_number, state),
+            String(inner) => inner.stable_hash(field_address, state),
+            Int(inner) => inner.stable_hash(field_address, state),
+            BigDecimal(inner) => inner.stable_hash(field_address, state),
+            Bool(inner) => inner.stable_hash(field_address, state),
+            List(inner) => inner.stable_hash(field_address, state),
+            Bytes(inner) => inner.stable_hash(field_address, state),
+            BigInt(inner) => inner.stable_hash(field_address, state),
         }
     }
 }
@@ -526,10 +572,15 @@ where
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
 pub struct Entity(HashMap<Attribute, Value>);
 
-impl StableHash for Entity {
+impl stable_hash_legacy::StableHash for Entity {
     #[inline]
-    fn stable_hash<H: StableHasher>(&self, mut sequence_number: H::Seq, state: &mut H) {
-        self.0.stable_hash(sequence_number.next_child(), state);
+    fn stable_hash<H: stable_hash_legacy::StableHasher>(
+        &self,
+        mut sequence_number: H::Seq,
+        state: &mut H,
+    ) {
+        use stable_hash_legacy::SequenceNumber;
+        stable_hash_legacy::StableHash::stable_hash(&self.0, sequence_number.next_child(), state);
     }
 }
 
